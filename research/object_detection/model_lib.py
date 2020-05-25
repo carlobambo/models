@@ -306,6 +306,18 @@ def create_model_fn(detection_model_fn, configs, hparams, use_tpu=False,
       An `EstimatorSpec` that encapsulates the model and its serving
         configurations.
     """
+    with tf.variable_scope(
+      name_or_scope='signal_early_stopping',
+      values=[],
+      reuse=tf.AUTO_REUSE):
+      tf.get_variable(
+        name='STOP',
+        shape=[],
+        dtype=tf.bool,
+        initializer=tf.constant_initializer(False),
+        collections=[tf.GraphKeys.LOCAL_VARIABLES],
+        trainable=False) 
+
     params = params or {}
     total_loss, train_op, detections, export_outputs = None, None, None, None
     is_training = mode == tf.estimator.ModeKeys.TRAIN
@@ -773,7 +785,8 @@ def create_train_and_eval_specs(train_input_fn,
                                 train_steps,
                                 eval_on_train_data=False,
                                 final_exporter_name='Servo',
-                                eval_spec_names=None):
+                                eval_spec_names=None,
+                                eval_hooks=[]):
   """Creates a `TrainSpec` and `EvalSpec`s.
 
   Args:
@@ -816,7 +829,8 @@ def create_train_and_eval_specs(train_input_fn,
             name=eval_spec_name,
             input_fn=eval_input_fn,
             steps=None,
-            exporters=exporter))
+            exporters=exporter,
+            hooks=eval_hooks))
 
   if eval_on_train_data:
     eval_specs.append(

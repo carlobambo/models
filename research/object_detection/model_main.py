@@ -53,6 +53,28 @@ flags.DEFINE_boolean(
     'run_once', False, 'If running in eval-only mode, whether to run just '
     'one round of eval vs running continuously (default).'
 )
+flags.DEFINE_boolean(
+  'early_stopping_enabled', False, 'Enable early stopping',
+)
+flags.DEFINE_string(
+  'early_stopping_metric', 'DetectionBoxes_Precision/mAP', 'Metric name to monitor for early stopping'
+)
+flags.DEFINE_string(
+  'early_stopping_condition', 'inc', 'Early stopping condition, one of (inc, dec)'
+)
+flags.DEFINE_integer(
+  'early_stopping_max_steps', 10000, 'Early stopping steps without inc/dec'
+)
+flags.DEFINE_integer(
+  'early_stopping_min_steps', 20, 'Early stopping min steps of training'
+)
+flags.DEFINE_integer(
+  'early_stopping_run_every_secs', 60, 'How often early stopping will check the metric'
+)
+flags.DEFINE_integer(
+  'early_stopping_run_every_steps', None, 'Every how many steps will early stopping checks the metric'
+)
+
 FLAGS = flags.FLAGS
 
 
@@ -93,16 +115,34 @@ def main(unused_argv):
       model_lib.continuous_eval(estimator, FLAGS.checkpoint_dir, input_fn,
                                 train_steps, name)
   else:
+    eval_hooks = []
+    if FLAGS.early_stopping_enabled:
+      print('====early_stopping_enabled')
+      if FLAGS.early_stopping_condition == 'inc':
+        early_stopping_hook = tf.estimator.experimental.stop_if_no_increase_hook(
+          estimator,
+          metric_name=FLAGS.early_stopping_metric,
+          max_steps_without_increase=FLAGS.early_stopping_max_steps,
+          eval_dir=estimator.eval_dir() + '_0',
+          min_steps=FLAGS.early_stopping_min_steps,
+          run_every_secs=FLAGS.early_stopping_run_every_secs,
+          run_every_steps=FLAGS.early_stopping_run_every_steps)
+        eval_hooks.append(early_stopping_hook)
+
     train_spec, eval_specs = model_lib.create_train_and_eval_specs(
         train_input_fn,
         eval_input_fns,
         eval_on_train_input_fn,
         predict_input_fn,
         train_steps,
+        eval_hooks=eval_hooks,
         eval_on_train_data=False)
 
     # Currently only a single Eval Spec is allowed.
-    tf.estimator.train_and_evaluate(estimator, train_spec, eval_specs[0])
+    try:
+      tf.estimator.train_and_evaluate(estimator, train_spec, eval_specs[0])
+    except ValueError as e:
+      print("training stopped")
 
 
 if __name__ == '__main__':
