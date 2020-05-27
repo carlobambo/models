@@ -24,6 +24,7 @@ import tensorflow as tf
 
 from object_detection import model_hparams
 from object_detection import model_lib
+from object_detection import early_stopping
 
 flags.DEFINE_string(
     'model_dir', None, 'Path to output model directory '
@@ -119,7 +120,7 @@ def main(unused_argv):
     if FLAGS.early_stopping_enabled:
       print('====early_stopping_enabled')
       if FLAGS.early_stopping_condition == 'inc':
-        early_stopping_hook = tf.estimator.experimental.stop_if_no_increase_hook(
+        early_stopping_hook = early_stopping.stop_if_no_increase_hook(
           estimator,
           metric_name=FLAGS.early_stopping_metric,
           max_steps_without_increase=FLAGS.early_stopping_max_steps,
